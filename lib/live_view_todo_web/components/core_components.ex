@@ -201,9 +201,9 @@ defmodule LiveViewTodoWeb.CoreComponents do
   def simple_form(assigns) do
     ~H"""
     <.form :let={f} for={@for} as={@as} {@rest}>
-      <div class="mt-10 space-y-8 bg-white">
+      <div>
         <%= render_slot(@inner_block, f) %>
-        <div :for={action <- @actions} class="mt-2 flex items-center justify-between gap-6">
+        <div :for={action <- @actions}>
           <%= render_slot(action, f) %>
         </div>
       </div>
@@ -291,12 +291,16 @@ defmodule LiveViewTodoWeb.CoreComponents do
 
   slot :inner_block
 
-  def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
+  def input(%{field: {f, field}} = assigns) do
     assigns
-    |> assign(field: nil, id: assigns.id || field.id)
-    |> assign(:errors, Enum.map(field.errors, &translate_error(&1)))
-    |> assign_new(:name, fn -> if assigns.multiple, do: field.name <> "[]", else: field.name end)
-    |> assign_new(:value, fn -> field.value end)
+    |> assign(field: nil)
+    |> assign_new(:name, fn ->
+      name = Phoenix.HTML.Form.input_name(f, field)
+      if assigns.multiple, do: name <> "[]", else: name
+    end)
+    |> assign_new(:id, fn -> Phoenix.HTML.Form.input_id(f, field) end)
+    |> assign_new(:value, fn -> Phoenix.HTML.Form.input_value(f, field) end)
+    |> assign_new(:errors, fn -> translate_errors(f.errors || [], field) end)
     |> input()
   end
 
@@ -312,7 +316,7 @@ defmodule LiveViewTodoWeb.CoreComponents do
         <input type="hidden" name={@name} value="false" />
         <input
           type="checkbox"
-          id={@id}
+          id={@id || @name}
           name={@name}
           value="true"
           checked={@checked}
@@ -373,13 +377,11 @@ defmodule LiveViewTodoWeb.CoreComponents do
       <input
         type={@type}
         name={@name}
-        id={@id}
-        value={Phoenix.HTML.Form.normalize_value(@type, @value)}
+        id={@id || @name}
+        value={@value}
         class={[
-          "mt-2 block w-full rounded-lg text-zinc-900 focus:ring-0 sm:text-sm sm:leading-6",
-          "phx-no-feedback:border-zinc-300 phx-no-feedback:focus:border-zinc-400",
-          @errors == [] && "border-zinc-300 focus:border-zinc-400",
-          @errors != [] && "border-rose-400 focus:border-rose-400"
+          input_border(@errors),
+          "new-todo"
         ]}
         {@rest}
       />
@@ -387,6 +389,12 @@ defmodule LiveViewTodoWeb.CoreComponents do
     </div>
     """
   end
+
+  defp input_border([] = _errors),
+  do: "border-zinc-300 focus:border-zinc-400 focus:ring-zinc-800/5"
+
+  defp input_border([_ | _] = _errors),
+  do: "border-rose-400 focus:border-rose-400 focus:ring-rose-400/10"
 
   @doc """
   Renders a label.
@@ -670,5 +678,10 @@ defmodule LiveViewTodoWeb.CoreComponents do
   """
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
+  end
+
+
+  defp input_equals?(val1, val2) do
+    Phoenix.HTML.html_escape(val1) == Phoenix.HTML.html_escape(val2)
   end
 end
